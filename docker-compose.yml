@@ -48,15 +48,15 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
+    # host network: чтобы достучаться до Marzban (host:8000) и до бота (host:8081)
+    network_mode: host
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy/site:/srv:ro
       - ./caddy-data:/data
       - ./caddy-config:/config
-    networks: [vlessich]
+    environment:
+      SERVER_DOMAIN: ${SERVER_DOMAIN}
     profiles: ["caddy"]
 
   bot:
@@ -69,13 +69,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    # host.docker.internal — чтобы бот в bridge-сети мог достучаться до Marzban на host:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
     networks: [vlessich]
-    # для honeypot и подписки — публикуем порты
+    # Honeypot и Subscription publish'им на host
     ports:
-      - "8080:8080"   # honeypot
-      - "127.0.0.1:8081:8081"   # subscription server (за Caddy)
+      - "8080:8080"            # honeypot
+      - "127.0.0.1:8081:8081"  # subscription server (за Caddy)
 
 networks:
   vlessich:
