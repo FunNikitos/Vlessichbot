@@ -11,6 +11,7 @@ from app.bot.dispatcher import create_bot, create_dispatcher
 from app.config import settings
 from app.db.session import engine
 from app.redis import close_redis
+from app.services.honeypot.server import HoneypotServer
 from app.tasks.scheduler import start_scheduler, stop_scheduler
 
 logging.basicConfig(
@@ -22,13 +23,16 @@ log = logging.getLogger("vlessich")
 bot = create_bot()
 dp = create_dispatcher()
 _scheduler = None
+_honeypot: HoneypotServer | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _scheduler
+    global _scheduler, _honeypot
     log.info("Starting up (mode=%s)", settings.run_mode)
     _scheduler = await start_scheduler(bot)
+    _honeypot = HoneypotServer(bot)
+    await _honeypot.start()
     if settings.run_mode == "webhook" and settings.webhook_url:
         url = f"{settings.webhook_url.rstrip('/')}/webhook"
         await bot.set_webhook(url, secret_token=settings.webhook_secret)
@@ -36,6 +40,8 @@ async def lifespan(app: FastAPI):
     yield
     log.info("Shutting down")
     await stop_scheduler(_scheduler)
+    if _honeypot is not None:
+        await _honeypot.stop()
     if settings.run_mode == "webhook":
         await bot.delete_webhook()
     await bot.session.close()
@@ -66,13 +72,17 @@ async def webhook(request: Request) -> Response:
 
 
 async def _run_polling() -> None:
-    global _scheduler
+    global _scheduler, _honeypot
     log.info("Polling mode")
     _scheduler = await start_scheduler(bot)
+    _honeypot = HoneypotServer(bot)
+    await _honeypot.start()
     try:
         await dp.start_polling(bot)
     finally:
         await stop_scheduler(_scheduler)
+        if _honeypot is not None:
+            await _honeypot.stop()
         await bot.session.close()
         await engine.dispose()
         await close_redis()
