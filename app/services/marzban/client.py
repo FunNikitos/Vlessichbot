@@ -99,6 +99,29 @@ class MarzbanClient:
             raise MarzbanError(f"get_inbounds: {r.status_code} {r.text}")
         return r.json()
 
+    async def get_system_stats(self) -> dict[str, Any]:
+        """Marzban /api/system: total bandwidth, active users, mem/cpu, etc."""
+        r = await self._request("GET", "/api/system")
+        if r.status_code != 200:
+            raise MarzbanError(f"get_system_stats: {r.status_code} {r.text}")
+        return r.json()
+
+    async def get_users(
+        self,
+        *,
+        offset: int = 0,
+        limit: int = 100,
+        username: str | None = None,
+    ) -> dict[str, Any]:
+        """Paginated users list with traffic counters (used_traffic, lifetime_used_traffic, online_at)."""
+        params: dict[str, Any] = {"offset": offset, "limit": limit}
+        if username:
+            params["username"] = username
+        r = await self._request("GET", "/api/users", params=params)
+        if r.status_code != 200:
+            raise MarzbanError(f"get_users: {r.status_code} {r.text}")
+        return r.json()
+
     async def get_user(self, username: str) -> dict[str, Any] | None:
         r = await self._request("GET", f"/api/user/{username}")
         if r.status_code == 404:

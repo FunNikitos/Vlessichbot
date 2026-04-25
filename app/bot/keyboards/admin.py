@@ -23,7 +23,10 @@ def admin_menu() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="📜 История блоков", callback_data="adm:history"),
                 InlineKeyboardButton(text="👁 Honeypot", callback_data="adm:honeypot"),
             ],
-            [InlineKeyboardButton(text="🐞 Ошибки", callback_data="adm:errors")],
+            [
+                InlineKeyboardButton(text="📊 Трафик", callback_data="adm:traffic"),
+                InlineKeyboardButton(text="🐞 Ошибки", callback_data="adm:errors"),
+            ],
         ]
     )
 

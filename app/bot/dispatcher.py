@@ -52,6 +52,7 @@ def create_dispatcher() -> Dispatcher:
         panel as admin_panel,
         rotation as admin_rotation,
         stats as admin_stats,
+        traffic as admin_traffic,
         users as admin_users,
     )
 
@@ -73,6 +74,8 @@ def create_dispatcher() -> Dispatcher:
         admin_errors.router,
         admin_marzban.router,
         admin_findsni.router,
+        admin_traffic.router,
+        admin_traffic.admin_router,
     ):
         dp.include_router(r)
 
