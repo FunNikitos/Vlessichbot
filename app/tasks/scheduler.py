@@ -15,7 +15,13 @@ log = logging.getLogger(__name__)
 async def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
 
-    from app.tasks.jobs import expire_users, probe_protocols, rotate_short_id
+    from app.tasks.jobs import (
+        antifilter_refresh,
+        expire_users,
+        probe_protocols,
+        rotate_short_id,
+        sni_finder,
+    )
 
     scheduler.add_job(
         expire_users.run,
@@ -44,13 +50,35 @@ async def start_scheduler(bot: Bot) -> AsyncIOScheduler:
         coalesce=True,
         replace_existing=True,
     )
+    scheduler.add_job(
+        antifilter_refresh.run,
+        IntervalTrigger(hours=settings.antifilter_refresh_hours),
+        kwargs={"bot": bot},
+        id="antifilter_refresh",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+        next_run_time=None,
+    )
+    # SNI finder: weekly probe of donor pool
+    scheduler.add_job(
+        sni_finder.run,
+        IntervalTrigger(days=7),
+        kwargs={"bot": bot},
+        id="sni_finder",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
 
     scheduler.start()
     log.info(
-        "Scheduler started: expire/%dm, probe/%dm, rotate_short_id/%dd",
+        "Scheduler started: expire/%dm, probe/%dm, rotate_short_id/%dd, "
+        "antifilter/%dh, sni_finder/7d",
         settings.expiration_interval_min,
         settings.monitor_interval_min,
         settings.short_id_rotation_days,
+        settings.antifilter_refresh_hours,
     )
     return scheduler
 

@@ -25,3 +25,12 @@ HONEYPOT_BLOCK_FAIL = "❌ Не удалось заблокировать <code>
 
 USER_EXPIRED_NOTIFY = "⏳ Срок твоего доступа истёк. Подключения деактивированы."
 USER_EXPIRED_OWNER = "⏳ Истёк доступ: {name} (id {telegram_id}). Деактивировано: {connections_count}."
+
+OWNER_GENERIC_ALERT = "⚠️ <b>{title}</b>\n{body}"
+
+SNI_FINDER_RESULT = (
+    "🔍 <b>SNI Finder</b>\n"
+    "Проверено: {total}\n"
+    "Прошло TLS1.3+h2: {eligible}\n\n"
+    "{top}"
+)

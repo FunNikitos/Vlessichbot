@@ -44,6 +44,7 @@ def create_dispatcher() -> Dispatcher:
     from app.bot.handlers.admin import (
         codes as admin_codes,
         errors as admin_errors,
+        findsni as admin_findsni,
         history as admin_history,
         honeypot as admin_honeypot,
         invites as admin_invites,
@@ -71,6 +72,7 @@ def create_dispatcher() -> Dispatcher:
         admin_honeypot.router,
         admin_errors.router,
         admin_marzban.router,
+        admin_findsni.router,
     ):
         dp.include_router(r)
 

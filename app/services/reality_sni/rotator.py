@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.models import InboundState, Server, SniDonor
 from app.services.marzban.client import MarzbanError, get_marzban
+from app.services.reality_sni.finder import get_top_donors
 from app.utils.errors import log_error
 
 log = logging.getLogger(__name__)
@@ -41,11 +42,14 @@ def _pick_port(current: int | None) -> int:
 
 
 async def _pick_sni(session: AsyncSession, current: str | None) -> str:
-    """Выбрать SNI: сначала из sni_donors-таблицы (top score), fallback — из settings."""
-    result = await session.execute(
-        select(SniDonor).order_by(SniDonor.score.desc(), SniDonor.id.desc()).limit(20)
-    )
-    donors = [d.domain for d in result.scalars().all()]
+    """Выбрать SNI: сначала из sni_donors-таблицы (top score, eligible),
+    fallback — все donors, fallback — settings.sni_donors."""
+    donors = await get_top_donors(session, limit=20)
+    if not donors:
+        result = await session.execute(
+            select(SniDonor).order_by(SniDonor.score.desc(), SniDonor.id.desc()).limit(20)
+        )
+        donors = [d.domain for d in result.scalars().all()]
     if not donors:
         donors = list(settings.sni_donors)
     candidates = [d for d in donors if d != current]
