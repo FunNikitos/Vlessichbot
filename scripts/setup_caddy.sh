@@ -9,11 +9,14 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/opt/vlessich}"
 cd "${APP_DIR}"
 
-# Sanity: SERVER_DOMAIN должен быть выставлен в .env
-if ! grep -q '^SERVER_DOMAIN=' .env || grep -q '^SERVER_DOMAIN=$' .env || grep -q 'vpn.example.com' .env; then
+# Sanity: SERVER_DOMAIN должен быть выставлен в .env (читаем именно значение,
+# а не grep-им по всему файлу — чтобы комментарии/CF_SUBDOMAIN не путали проверку)
+SERVER_DOMAIN="$(grep -E '^SERVER_DOMAIN=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | xargs || true)"
+if [[ -z "${SERVER_DOMAIN}" || "${SERVER_DOMAIN}" == "vpn.example.com" ]]; then
   echo "!! SERVER_DOMAIN в .env не задан или указывает на пример. Поправь и перезапусти." >&2
   exit 1
 fi
+echo "==> SERVER_DOMAIN=${SERVER_DOMAIN}"
 
 # CF_SUBDOMAIN опционален. Caddyfile делает import /etc/caddy/Caddyfile.cf.
 # Создаём пустой файл если CF_SUBDOMAIN не задан — пустой import = no-op.
