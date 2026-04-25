@@ -57,8 +57,9 @@ echo "==> [6/6] docker compose up -d (postgres + redis + bot) + alembic upgrade"
 cd "${APP_DIR}"
 docker compose up -d --build postgres redis
 # wait for postgres healthcheck
+# Docker 25+ возвращает NDJSON (по строке на контейнер) — НЕ массив.
 for i in {1..30}; do
-  state=$(docker compose ps --format json postgres 2>/dev/null | jq -r '.[0].Health' || echo "")
+  state=$(docker inspect --format '{{.State.Health.Status}}' vlessich-postgres-1 2>/dev/null || echo "")
   [[ "${state}" == "healthy" ]] && break
   sleep 2
 done
