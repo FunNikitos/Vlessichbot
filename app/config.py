@@ -4,7 +4,8 @@ from __future__ import annotations
 from typing import List
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from typing_extensions import Annotated
 
 
 class Settings(BaseSettings):
@@ -40,7 +41,9 @@ class Settings(BaseSettings):
     sub_port: int = 8081
 
     # ----- Reality / SNI -----
-    sni_donors: List[str] = Field(
+    # NoDecode disables pydantic-settings' default JSON decoding for env strings
+    # so plain CSV like "a.com,b.com" doesn't trigger JSONDecodeError.
+    sni_donors: Annotated[List[str], NoDecode] = Field(
         default_factory=lambda: ["www.microsoft.com", "www.cloudflare.com", "github.com"]
     )
     short_id_rotation_days: int = 7
