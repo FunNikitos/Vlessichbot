@@ -11,7 +11,7 @@ from app.bot.dispatcher import create_bot, create_dispatcher
 from app.config import settings
 from app.db.session import engine
 from app.redis import close_redis
-from app.services.honeypot.server import HoneypotServer
+from app.services.honeypot.server import HoneypotServer, set_instance as set_honeypot_instance
 from app.tasks.scheduler import start_scheduler, stop_scheduler
 
 logging.basicConfig(
@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     log.info("Starting up (mode=%s)", settings.run_mode)
     _scheduler = await start_scheduler(bot)
     _honeypot = HoneypotServer(bot)
+    set_honeypot_instance(_honeypot)
     await _honeypot.start()
     if settings.run_mode == "webhook" and settings.webhook_url:
         url = f"{settings.webhook_url.rstrip('/')}/webhook"
@@ -76,6 +77,7 @@ async def _run_polling() -> None:
     log.info("Polling mode")
     _scheduler = await start_scheduler(bot)
     _honeypot = HoneypotServer(bot)
+    set_honeypot_instance(_honeypot)
     await _honeypot.start()
     try:
         await dp.start_polling(bot)

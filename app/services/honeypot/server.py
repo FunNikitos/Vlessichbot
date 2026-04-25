@@ -24,10 +24,14 @@ from app.config import settings
 from app.db.models import HoneypotHit
 from app.db.session import SessionLocal
 from app.services.honeypot.ufw import ufw_block
+from app.services.settings_store import get_bool, set_bool
 from app.utils.audit import audit
 from app.utils.geoip import lookup_country
 
 log = logging.getLogger(__name__)
+
+# Setting key — runtime override over HONEYPOT_ENABLED env default
+SETTING_KEY = "honeypot.enabled"
 
 # in-memory дедуп: ip -> last_block_ts
 _recent_block: dict[str, float] = {}
@@ -50,31 +54,56 @@ class HoneypotServer:
         self._host = host
         self._port = port or settings.honeypot_port
         self._server: asyncio.base_events.Server | None = None
+        self._lock = asyncio.Lock()
+
+    @property
+    def is_running(self) -> bool:
+        return self._server is not None
+
+    async def is_enabled(self) -> bool:
+        """Effective state: Setting overrides ENV default."""
+        return await get_bool(SETTING_KEY, settings.honeypot_enabled)
 
     async def start(self) -> None:
-        if not settings.honeypot_enabled:
-            log.info("Honeypot disabled (HONEYPOT_ENABLED=false)")
-            return
-        try:
-            self._server = await asyncio.start_server(
-                self._on_connect, host=self._host, port=self._port
-            )
-        except OSError as e:
-            log.warning("Honeypot bind %s:%d failed: %s", self._host, self._port, e)
-            return
-        sockets = [s.getsockname() for s in (self._server.sockets or [])]
-        log.info("Honeypot listening on %s", sockets)
+        async with self._lock:
+            if self._server is not None:
+                return
+            if not await self.is_enabled():
+                log.info("Honeypot disabled (setting=%s, env=%s)", SETTING_KEY, settings.honeypot_enabled)
+                return
+            try:
+                self._server = await asyncio.start_server(
+                    self._on_connect, host=self._host, port=self._port
+                )
+            except OSError as e:
+                log.warning("Honeypot bind %s:%d failed: %s", self._host, self._port, e)
+                self._server = None
+                return
+            sockets = [s.getsockname() for s in (self._server.sockets or [])]
+            log.info("Honeypot listening on %s", sockets)
 
     async def stop(self) -> None:
-        if self._server is None:
-            return
-        self._server.close()
-        try:
-            await self._server.wait_closed()
-        except Exception:  # noqa: BLE001
-            pass
-        log.info("Honeypot stopped")
-        self._server = None
+        async with self._lock:
+            if self._server is None:
+                return
+            self._server.close()
+            try:
+                await self._server.wait_closed()
+            except Exception:  # noqa: BLE001
+                pass
+            log.info("Honeypot stopped")
+            self._server = None
+
+    async def enable(self) -> bool:
+        """Persist setting=true and start. Returns is_running."""
+        await set_bool(SETTING_KEY, True)
+        await self.start()
+        return self.is_running
+
+    async def disable(self) -> None:
+        """Persist setting=false and stop."""
+        await set_bool(SETTING_KEY, False)
+        await self.stop()
 
     async def _on_connect(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -138,3 +167,17 @@ class HoneypotServer:
                 )
         except Exception as e:  # noqa: BLE001
             log.warning("honeypot owner alert failed: %s", e)
+
+
+# ----- module-level singleton -----
+
+_instance: HoneypotServer | None = None
+
+
+def set_instance(srv: HoneypotServer) -> None:
+    global _instance
+    _instance = srv
+
+
+def get_instance() -> HoneypotServer | None:
+    return _instance

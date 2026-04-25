@@ -28,6 +28,21 @@ def admin_menu() -> InlineKeyboardMarkup:
     )
 
 
+def honeypot_menu(running: bool) -> InlineKeyboardMarkup:
+    toggle = (
+        InlineKeyboardButton(text="🔴 Выключить", callback_data="hp:off")
+        if running
+        else InlineKeyboardButton(text="🟢 Включить", callback_data="hp:on")
+    )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [toggle],
+            [InlineKeyboardButton(text="📋 Последние удары", callback_data="hp:list")],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="adm:menu")],
+        ]
+    )
+
+
 def rotate_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
