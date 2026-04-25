@@ -10,7 +10,12 @@ from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bot.keyboards.user import connection_actions, main_menu
+from app.bot.keyboards.user import (
+    confirm_delete,
+    connection_actions,
+    connection_list,
+    main_menu,
+)
 from app.bot.texts.messages import CONFIG_CREATED, NO_CONFIGS
 from app.services.connection_service import (
     create_connection,
@@ -65,12 +70,38 @@ async def list_configs(event: Message | CallbackQuery, session: AsyncSession) ->
         if isinstance(event, CallbackQuery):
             await event.answer()
         return
-    lines = ["<b>Твои конфиги:</b>"]
-    for c in rows:
-        lines.append(f"• #{c.id} {c.name} ({c.routing_mode})")
-    await target.answer("\n".join(lines), reply_markup=main_menu())
+    text = (
+        f"<b>Твои конфиги ({len(rows)}):</b>\n\n"
+        "Нажми на конфиг чтобы открыть действия (QR, удалить, режим)."
+    )
+    await target.answer(text, reply_markup=connection_list(rows))
     if isinstance(event, CallbackQuery):
         await event.answer()
+
+
+@router.callback_query(F.data.startswith("conn:show:"))
+async def cb_show(cb: CallbackQuery, session: AsyncSession) -> None:
+    cid = int(cb.data.split(":")[2])
+    user = await get_or_create_user(session, cb.from_user)
+    conn = await get_connection(session, cid, user.id)
+    if not conn:
+        await cb.answer("Не найдено", show_alert=True)
+        return
+    text = (
+        f"<b>Конфиг #{conn.id}</b>\n"
+        f"Имя: <code>{conn.name}</code>\n"
+        f"Режим: <b>{conn.routing_mode}</b>\n\n"
+        f"<code>{public_url_for(conn, user)}</code>"
+    )
+    try:
+        await cb.message.edit_text(
+            text, reply_markup=connection_actions(conn.id, conn.routing_mode)
+        )
+    except Exception:  # noqa: BLE001
+        await cb.message.answer(
+            text, reply_markup=connection_actions(conn.id, conn.routing_mode)
+        )
+    await cb.answer()
 
 
 @router.callback_query(F.data.startswith("conn:qr:"))
@@ -133,13 +164,43 @@ async def cb_mode(cb: CallbackQuery, session: AsyncSession) -> None:
         pass
 
 
-@router.callback_query(F.data.startswith("conn:del:"))
-async def cb_del(cb: CallbackQuery, session: AsyncSession) -> None:
-    cid = int(cb.data.split(":")[2])
+@router.callback_query(F.data.startswith("conn:del:confirm:"))
+async def cb_del_confirm(cb: CallbackQuery, session: AsyncSession) -> None:
+    cid = int(cb.data.split(":")[3])
     user = await get_or_create_user(session, cb.from_user)
     ok = await delete_connection(session, cid, user.id)
     if not ok:
         await cb.answer("Не найдено", show_alert=True)
         return
-    await cb.message.edit_text(f"🗑 Конфиг #{cid} удалён.", reply_markup=main_menu())
+    # После удаления — показываем актуальный список (или пустое меню)
+    rows = await list_connections(session, user.id)
+    if rows:
+        text = f"🗑 Конфиг #{cid} удалён.\n\n<b>Осталось ({len(rows)}):</b>"
+        await cb.message.edit_text(text, reply_markup=connection_list(rows))
+    else:
+        await cb.message.edit_text(
+            f"🗑 Конфиг #{cid} удалён. У тебя больше нет активных конфигов.",
+            reply_markup=main_menu(),
+        )
+    await cb.answer("Удалено")
+
+
+@router.callback_query(F.data.startswith("conn:del:"))
+async def cb_del(cb: CallbackQuery, session: AsyncSession) -> None:
+    # Подтверждение перед удалением (защита от случайного нажатия).
+    cid = int(cb.data.split(":")[2])
+    user = await get_or_create_user(session, cb.from_user)
+    conn = await get_connection(session, cid, user.id)
+    if not conn:
+        await cb.answer("Не найдено", show_alert=True)
+        return
+    text = (
+        f"⚠️ Удалить конфиг #{conn.id} ({conn.name})?\n\n"
+        "Существующие подключения в Hiddify перестанут работать. "
+        "Если это последний конфиг — твой Marzban-аккаунт также будет удалён."
+    )
+    try:
+        await cb.message.edit_text(text, reply_markup=confirm_delete(conn.id))
+    except Exception:  # noqa: BLE001
+        await cb.message.answer(text, reply_markup=confirm_delete(conn.id))
     await cb.answer()

@@ -51,6 +51,47 @@ def connection_actions(conn_id: int, mode: str = "smart") -> InlineKeyboardMarku
                 InlineKeyboardButton(text=full_label, callback_data=f"conn:mode:{conn_id}:full"),
             ],
             [InlineKeyboardButton(text="🗑 Удалить", callback_data=f"conn:del:{conn_id}")],
-            [InlineKeyboardButton(text="◀️ Меню", callback_data="menu")],
+            [
+                InlineKeyboardButton(text="◀️ К списку", callback_data="conn:list"),
+                InlineKeyboardButton(text="🏠 Меню", callback_data="menu"),
+            ],
+        ]
+    )
+
+
+def connection_list(rows) -> InlineKeyboardMarkup:
+    """Список конфигов: каждый — отдельная кликабельная кнопка."""
+    keyboard = []
+    for c in rows:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=f"#{c.id} {c.name} ({c.routing_mode})",
+                    callback_data=f"conn:show:{c.id}",
+                )
+            ]
+        )
+    keyboard.append(
+        [InlineKeyboardButton(text="🆕 Новый конфиг", callback_data="conn:new")]
+    )
+    keyboard.append(
+        [InlineKeyboardButton(text="◀️ Меню", callback_data="menu")]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def confirm_delete(conn_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🗑 Да, удалить",
+                    callback_data=f"conn:del:confirm:{conn_id}",
+                ),
+                InlineKeyboardButton(
+                    text="◀️ Отмена",
+                    callback_data=f"conn:show:{conn_id}",
+                ),
+            ]
         ]
     )
