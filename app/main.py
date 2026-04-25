@@ -12,6 +12,10 @@ from app.config import settings
 from app.db.session import engine
 from app.redis import close_redis
 from app.services.honeypot.server import HoneypotServer, set_instance as set_honeypot_instance
+from app.services.subscription.server import (
+    start_subscription_server,
+    stop_subscription_server,
+)
 from app.tasks.scheduler import start_scheduler, stop_scheduler
 
 logging.basicConfig(
@@ -34,12 +38,14 @@ async def lifespan(app: FastAPI):
     _honeypot = HoneypotServer(bot)
     set_honeypot_instance(_honeypot)
     await _honeypot.start()
+    await start_subscription_server()
     if settings.run_mode == "webhook" and settings.webhook_url:
         url = f"{settings.webhook_url.rstrip('/')}/webhook"
         await bot.set_webhook(url, secret_token=settings.webhook_secret)
         log.info("Webhook set: %s", url)
     yield
     log.info("Shutting down")
+    await stop_subscription_server()
     await stop_scheduler(_scheduler)
     if _honeypot is not None:
         await _honeypot.stop()
@@ -79,9 +85,11 @@ async def _run_polling() -> None:
     _honeypot = HoneypotServer(bot)
     set_honeypot_instance(_honeypot)
     await _honeypot.start()
+    await start_subscription_server()
     try:
         await dp.start_polling(bot)
     finally:
+        await stop_subscription_server()
         await stop_scheduler(_scheduler)
         if _honeypot is not None:
             await _honeypot.stop()

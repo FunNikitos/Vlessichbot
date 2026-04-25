@@ -37,12 +37,18 @@ def back_to_menu() -> InlineKeyboardMarkup:
     )
 
 
-def connection_actions(conn_id: int) -> InlineKeyboardMarkup:
+def connection_actions(conn_id: int, mode: str = "smart") -> InlineKeyboardMarkup:
+    smart_label = "✅ Smart" if mode == "smart" else "⚪ Smart"
+    full_label = "✅ Full" if mode == "full" else "⚪ Full"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="📷 QR", callback_data=f"conn:qr:{conn_id}"),
                 InlineKeyboardButton(text="📋 Скопировать", callback_data=f"conn:copy:{conn_id}"),
+            ],
+            [
+                InlineKeyboardButton(text=smart_label, callback_data=f"conn:mode:{conn_id}:smart"),
+                InlineKeyboardButton(text=full_label, callback_data=f"conn:mode:{conn_id}:full"),
             ],
             [InlineKeyboardButton(text="🗑 Удалить", callback_data=f"conn:del:{conn_id}")],
             [InlineKeyboardButton(text="◀️ Меню", callback_data="menu")],

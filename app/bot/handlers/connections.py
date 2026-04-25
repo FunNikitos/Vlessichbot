@@ -1,4 +1,4 @@
-"""Connection (config) lifecycle: create / list / delete / qr."""
+"""Connection (config) lifecycle: create / list / delete / qr / mode."""
 from __future__ import annotations
 
 import io
@@ -17,6 +17,8 @@ from app.services.connection_service import (
     delete_connection,
     get_connection,
     list_connections,
+    public_url_for,
+    set_routing_mode,
 )
 from app.services.user_service import get_or_create_user
 from app.utils.errors import log_error
@@ -45,8 +47,8 @@ async def new_config(event: Message | CallbackQuery, session: AsyncSession) -> N
             await event.answer()
         return
     await target.answer(
-        CONFIG_CREATED.format(url=conn.subscription_url),
-        reply_markup=connection_actions(conn.id),
+        CONFIG_CREATED.format(url=public_url_for(conn, user)),
+        reply_markup=connection_actions(conn.id, conn.routing_mode),
     )
     if isinstance(event, CallbackQuery):
         await event.answer()
@@ -79,7 +81,8 @@ async def cb_qr(cb: CallbackQuery, session: AsyncSession) -> None:
     if not conn:
         await cb.answer("Не найдено", show_alert=True)
         return
-    img = qrcode.make(conn.qr_payload)
+    payload = public_url_for(conn, user)
+    img = qrcode.make(payload)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
@@ -98,8 +101,36 @@ async def cb_copy(cb: CallbackQuery, session: AsyncSession) -> None:
     if not conn:
         await cb.answer("Не найдено", show_alert=True)
         return
-    await cb.message.answer(f"<code>{conn.subscription_url}</code>")
+    await cb.message.answer(f"<code>{public_url_for(conn, user)}</code>")
     await cb.answer("Ссылка отправлена")
+
+
+@router.callback_query(F.data.startswith("conn:mode:"))
+async def cb_mode(cb: CallbackQuery, session: AsyncSession) -> None:
+    parts = cb.data.split(":")
+    if len(parts) < 4:
+        await cb.answer("bad cb", show_alert=True)
+        return
+    cid = int(parts[2])
+    mode = parts[3]
+    user = await get_or_create_user(session, cb.from_user)
+    conn = await get_connection(session, cid, user.id)
+    if not conn:
+        await cb.answer("Не найдено", show_alert=True)
+        return
+    if conn.routing_mode == mode:
+        await cb.answer(f"Уже {mode}")
+        return
+    conn = await set_routing_mode(session, conn, mode)
+    label = "Smart (RU напрямую)" if mode == "smart" else "Full (всё через VPN)"
+    await cb.answer(f"✅ {label}")
+    try:
+        await cb.message.edit_reply_markup(
+            reply_markup=connection_actions(conn.id, conn.routing_mode)
+        )
+    except Exception:  # noqa: BLE001
+        # message could be a photo with no inline kb attached — ignore
+        pass
 
 
 @router.callback_query(F.data.startswith("conn:del:"))
