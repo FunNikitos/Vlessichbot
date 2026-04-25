@@ -1,0 +1,40 @@
+# Caddyfile — auto-TLS, fallback-сайт, проксирование подписки и Marzban API.
+# Замени {$SERVER_DOMAIN} в окружении или прямо здесь.
+
+{$SERVER_DOMAIN} {
+    encode gzip
+
+    # 1) Subscription URL — наш aiohttp-сервер (или Marzban напрямую)
+    @sub path /sub/* /sub4/* /sub6/* /links/*
+    handle @sub {
+        reverse_proxy 127.0.0.1:8081
+    }
+
+    # 2) Marzban admin API + dashboard — только из allowlist
+    @marzban path /api/* /dashboard/*
+    handle @marzban {
+        # Раскомментировать и подставить свой IP:
+        # @allowed remote_ip 1.2.3.4/32
+        # handle @allowed {
+        reverse_proxy 127.0.0.1:8000
+        # }
+        # respond 403
+    }
+
+    # 3) Healthcheck
+    handle /healthz {
+        reverse_proxy 127.0.0.1:8081
+    }
+
+    # 4) Всё остальное — фейковый сайт-визитка (маскировка)
+    handle {
+        root * /srv
+        file_server
+        try_files {path} /index.html
+    }
+}
+
+# HTTP -> HTTPS redirect
+:80 {
+    redir https://{host}{uri} permanent
+}

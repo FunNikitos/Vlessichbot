@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vlessich
+      POSTGRES_PASSWORD: vlessich
+      POSTGRES_DB: vlessich
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vlessich"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [vlessich]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - ./redis-data:/data
+    networks: [vlessich]
+
+  # Marzban panel — управляет Xray-core, выдаёт subscription URL.
+  # Поднимается отдельно скриптом scripts/setup_marzban.sh,
+  # этот блок — для удобной локальной/контейнерной интеграции.
+  marzban:
+    image: gozargah/marzban:latest
+    restart: unless-stopped
+    env_file:
+      - ./marzban.env
+    network_mode: host
+    volumes:
+      - /var/lib/marzban:/var/lib/marzban
+      - /opt/marzban:/code
+    profiles: ["marzban"]
+
+  # traffic-ui — read-only dashboard для трафика (опционально)
+  traffic-ui:
+    image: ghcr.io/scriptcascade/traffic-ui-open-source:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8765:8080"
+    profiles: ["traffic-ui"]
+    networks: [vlessich]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/site:/srv:ro
+      - ./caddy-data:/data
+      - ./caddy-config:/config
+    networks: [vlessich]
+    profiles: ["caddy"]
+
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./data:/app/data
+    networks: [vlessich]
+    # для honeypot и подписки — публикуем порты
+    ports:
+      - "8080:8080"   # honeypot
+      - "127.0.0.1:8081:8081"   # subscription server (за Caddy)
+
+networks:
+  vlessich:
+    driver: bridge
