@@ -1,0 +1,12 @@
+[Unit]
+Description=Forward docker bridge :8000 to Marzban 127.0.0.1:8000 (so dockerised bot can reach Marzban API which binds only to localhost when no SSL configured)
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+ExecStart=/usr/bin/socat TCP-LISTEN:8000,fork,reuseaddr,bind=172.17.0.1 TCP:127.0.0.1:8000
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,19 +1,19 @@
 # Caddyfile — auto-TLS, fallback-сайт, проксирование подписки и Marzban API.
-# Замени {$SERVER_DOMAIN} в окружении или прямо здесь.
+# Подменяется через {$SERVER_DOMAIN} и {$CF_SUBDOMAIN} в окружении.
 
 {$SERVER_DOMAIN} {
     encode gzip
 
-    # 1) Subscription URL — наш aiohttp-сервер (или Marzban напрямую)
+    # 1) Subscription URL — наш aiohttp-сервер (port 8081 на host)
     @sub path /sub/* /sub4/* /sub6/* /links/*
     handle @sub {
         reverse_proxy 127.0.0.1:8081
     }
 
-    # 2) Marzban admin API + dashboard — только из allowlist
+    # 2) Marzban admin API + dashboard
     @marzban path /api/* /dashboard/*
     handle @marzban {
-        # Раскомментировать и подставить свой IP:
+        # Раскомментировать для allowlist:
         # @allowed remote_ip 1.2.3.4/32
         # handle @allowed {
         reverse_proxy 127.0.0.1:8000
@@ -21,12 +21,40 @@
         # respond 403
     }
 
-    # 3) Healthcheck
+    # 3) VLESS+XHTTP fallback. Xray слушает 127.0.0.1:2087.
+    # Caddy терминирует TLS на 443 и проксирует только path=/xhttp на Xray.
+    # Этот трафик выглядит как обычный HTTPS к нашему сайту → DPI не отличает.
+    @xhttp path /xhttp /xhttp/*
+    handle @xhttp {
+        reverse_proxy 127.0.0.1:2087
+    }
+
+    # 4) Healthcheck
     handle /healthz {
         reverse_proxy 127.0.0.1:8081
     }
 
-    # 4) Всё остальное — фейковый сайт-визитка (маскировка)
+    # 5) Всё остальное — фейковый сайт-визитка (маскировка)
+    handle {
+        root * /srv
+        file_server
+        try_files {path} /index.html
+    }
+}
+
+# CF subdomain (A-запись с CF proxy ON) — для VLESS+gRPC через Cloudflare CDN.
+# CF proxy переваривает gRPC, скрывая реальный IP сервера.
+# Caddy получает gRPC от CF, отправляет на Xray (127.0.0.1:2096).
+{$CF_SUBDOMAIN} {
+    encode gzip
+
+    # gRPC: serviceName=vlessich-grpc → path = /vlessich-grpc/Tun
+    @grpc path /vlessich-grpc/* /grpc/*
+    handle @grpc {
+        reverse_proxy h2c://127.0.0.1:2096
+    }
+
+    # Fallback сайт (маскировка) — иначе CF будет ругаться на голый домен
     handle {
         root * /srv
         file_server

@@ -48,7 +48,8 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
-    # host network: чтобы достучаться до Marzban (host:8000) и до бота (host:8081)
+    # host network: чтобы достучаться до Marzban (host:8000), бота (host:8081)
+    # и до xray xhttp/grpc (host:2087, host:2096)
     network_mode: host
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -57,6 +58,7 @@ services:
       - ./caddy-config:/config
     environment:
       SERVER_DOMAIN: ${SERVER_DOMAIN}
+      CF_SUBDOMAIN: ${CF_SUBDOMAIN:-}
     profiles: ["caddy"]
 
   bot:
