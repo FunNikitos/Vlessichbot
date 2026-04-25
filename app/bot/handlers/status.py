@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.bot.keyboards.user import back_to_menu
 from app.config import settings
 from app.db.models import ProbeMetric
+from app.services.marzban.client import get_marzban
 from app.services.monitor.prober import PROTO_LABELS
 
 router = Router(name="status")
@@ -19,6 +20,8 @@ router = Router(name="status")
 
 async def _render_status(session: AsyncSession) -> str:
     lines = [f"📡 <b>Статус сервиса</b>  ({settings.server_domain})\n"]
+    panel_ok = await get_marzban().health()
+    lines.append(f"Marzban: {'🟢 online' if panel_ok else '🔴 offline'}")
     for protocol, label in PROTO_LABELS.items():
         from datetime import datetime, timedelta, timezone
 

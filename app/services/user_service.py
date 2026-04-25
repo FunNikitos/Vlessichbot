@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import ActivationLog, AuthAttempt, InviteCode, User
 from app.config import settings
+from app.services.marzban.service import sync_user_expire
 
 log = logging.getLogger(__name__)
 
@@ -97,4 +98,6 @@ async def activate_with_code(session: AsyncSession, user: User, code: str) -> bo
     attempt.blocked_until = None
     attempt.last_attempt_at = now
     await session.commit()
+    # Если уже есть marzban-аккаунт — продлим срок и активируем там.
+    await sync_user_expire(user)
     return True

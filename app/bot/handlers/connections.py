@@ -19,6 +19,7 @@ from app.services.connection_service import (
     list_connections,
 )
 from app.services.user_service import get_or_create_user
+from app.utils.errors import log_error
 
 log = logging.getLogger(__name__)
 router = Router(name="connections")
@@ -33,6 +34,12 @@ async def new_config(event: Message | CallbackQuery, session: AsyncSession) -> N
         conn = await create_connection(session, user)
     except Exception as e:  # noqa: BLE001
         log.exception("create_connection failed")
+        await log_error(
+            source="bot.new_config",
+            message=str(e),
+            user_id=event.from_user.id,
+            exc=e,
+        )
         await target.answer(f"❌ Не удалось создать конфиг: {e}")
         if isinstance(event, CallbackQuery):
             await event.answer()

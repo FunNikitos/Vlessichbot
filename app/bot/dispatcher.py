@@ -47,6 +47,7 @@ def create_dispatcher() -> Dispatcher:
         history as admin_history,
         honeypot as admin_honeypot,
         invites as admin_invites,
+        marzban as admin_marzban,
         panel as admin_panel,
         rotation as admin_rotation,
         stats as admin_stats,
@@ -69,6 +70,7 @@ def create_dispatcher() -> Dispatcher:
         admin_history.router,
         admin_honeypot.router,
         admin_errors.router,
+        admin_marzban.router,
     ):
         dp.include_router(r)
 
