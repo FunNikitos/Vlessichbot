@@ -56,8 +56,11 @@ ufw --force enable
 
 echo "==> [4/8] sync ./ → ${APP_DIR}"
 mkdir -p "${APP_DIR}"
+# CRITICAL: --exclude='.env' — иначе rsync --delete сотрёт боевой .env,
+# потому что в репо его нет (есть только .env.example).
 rsync -a --delete \
-  --exclude='.git' --exclude='postgres-data' --exclude='redis-data' \
+  --exclude='.git' --exclude='.env' \
+  --exclude='postgres-data' --exclude='redis-data' \
   --exclude='caddy-data' --exclude='caddy-config' --exclude='__pycache__' \
   ./ "${APP_DIR}/"
 

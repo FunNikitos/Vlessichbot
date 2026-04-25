@@ -52,7 +52,7 @@ services:
     # и до xray xhttp/grpc (host:2087, host:2096)
     network_mode: host
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy:/etc/caddy:ro
       - ./caddy/site:/srv:ro
       - ./caddy-data:/data
       - ./caddy-config:/config

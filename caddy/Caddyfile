@@ -1,5 +1,6 @@
 # Caddyfile — auto-TLS, fallback-сайт, проксирование подписки и Marzban API.
-# Подменяется через {$SERVER_DOMAIN} и {$CF_SUBDOMAIN} в окружении.
+# CF-subdomain блок вынесен в caddy/Caddyfile.cf и подключается через import,
+# чтобы пустой CF_SUBDOMAIN не валил весь Caddy.
 
 {$SERVER_DOMAIN} {
     encode gzip
@@ -13,12 +14,7 @@
     # 2) Marzban admin API + dashboard
     @marzban path /api/* /dashboard/*
     handle @marzban {
-        # Раскомментировать для allowlist:
-        # @allowed remote_ip 1.2.3.4/32
-        # handle @allowed {
         reverse_proxy 127.0.0.1:8000
-        # }
-        # respond 403
     }
 
     # 3) VLESS+XHTTP fallback. Xray слушает 127.0.0.1:2087.
@@ -42,25 +38,10 @@
     }
 }
 
-# CF subdomain (A-запись с CF proxy ON) — для VLESS+gRPC через Cloudflare CDN.
-# CF proxy переваривает gRPC, скрывая реальный IP сервера.
-# Caddy получает gRPC от CF, отправляет на Xray (127.0.0.1:2096).
-{$CF_SUBDOMAIN} {
-    encode gzip
-
-    # gRPC: serviceName=vlessich-grpc → path = /vlessich-grpc/Tun
-    @grpc path /vlessich-grpc/* /grpc/*
-    handle @grpc {
-        reverse_proxy h2c://127.0.0.1:2096
-    }
-
-    # Fallback сайт (маскировка) — иначе CF будет ругаться на голый домен
-    handle {
-        root * /srv
-        file_server
-        try_files {path} /index.html
-    }
-}
+# Опциональный CF-subdomain (gRPC over Cloudflare). Файл Caddyfile.cf
+# генерируется setup_caddy.sh ТОЛЬКО если в .env задан CF_SUBDOMAIN.
+# Glob-import: если файла нет (или пустой) — Caddy просто пропустит.
+import /etc/caddy/Caddyfile.cf*
 
 # HTTP -> HTTPS redirect
 :80 {
