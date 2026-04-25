@@ -31,16 +31,33 @@ def _expire_ts(user: User) -> int | None:
 async def ensure_marzban_user(user: User) -> dict[str, Any]:
     """Idempotent: создаёт Marzban-юзера или возвращает существующего.
     Возвращает payload с subscription_url. Side-effect: проставляет
-    user.marzban_username (caller должен сделать commit)."""
+    user.marzban_username (caller должен сделать commit).
+
+    Если у юзера уже есть аккаунт, но он привязан НЕ ко всем нашим
+    inbound'ам (например, был создан раньше когда был только Reality),
+    мы дотягиваем недостающие — иначе подписка вернёт лишь часть
+    vless:// строк.
+    """
     client = get_marzban()
     username = make_marzban_username(user)
     payload = await client.get_user(username)
+    desired_inbounds = ["VLESS Reality", "VLESS XHTTP", "VLESS gRPC CF"]
     if payload is None:
         payload = await client.create_user(
             username,
             expire=_expire_ts(user),
             note=f"tg:{user.telegram_id}",
         )
+    else:
+        current = (payload.get("inbounds") or {}).get("vless") or []
+        if set(current) != set(desired_inbounds):
+            try:
+                payload = await client.update_user(
+                    username,
+                    {"inbounds": {"vless": desired_inbounds}},
+                )
+            except MarzbanError as e:
+                log.warning("ensure_marzban_user: update inbounds failed: %s", e)
     user.marzban_username = username
     return payload
 

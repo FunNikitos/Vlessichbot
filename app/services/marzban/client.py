@@ -146,7 +146,12 @@ class MarzbanClient:
         body: dict[str, Any] = {
             "username": username,
             "proxies": proxies or {"vless": {"flow": "xtls-rprx-vision"}},
-            "inbounds": inbounds or {"vless": ["VLESS Reality"]},
+            # ВАЖНО: привязываем ко ВСЕМ нашим inbound'ам.
+            # Marzban сам решит, какие vless:// строки сгенерировать —
+            # по тем inbound, у которых есть хотя бы один Host.
+            "inbounds": inbounds or {
+                "vless": ["VLESS Reality", "VLESS XHTTP", "VLESS gRPC CF"]
+            },
             "expire": expire,
             "data_limit": data_limit,
             "data_limit_reset_strategy": data_limit_reset_strategy,
