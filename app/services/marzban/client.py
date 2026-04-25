@@ -156,6 +156,26 @@ class MarzbanClient:
             return False
         raise MarzbanError(f"delete_user: {r.status_code} {r.text}")
 
+    # ---------- core (Xray) config ----------
+
+    async def get_core_config(self) -> dict[str, Any]:
+        r = await self._request("GET", "/api/core/config")
+        if r.status_code != 200:
+            raise MarzbanError(f"get_core_config: {r.status_code} {r.text}")
+        return r.json()
+
+    async def put_core_config(self, config: dict[str, Any]) -> dict[str, Any]:
+        r = await self._request("PUT", "/api/core/config", json=config)
+        if r.status_code != 200:
+            raise MarzbanError(f"put_core_config: {r.status_code} {r.text}")
+        return r.json()
+
+    async def restart_core(self) -> bool:
+        r = await self._request("POST", "/api/core/restart")
+        if r.status_code in (200, 204):
+            return True
+        raise MarzbanError(f"restart_core: {r.status_code} {r.text}")
+
 
 # Singleton — создаём лениво, чтобы тесты могли подменять
 _client: MarzbanClient | None = None
