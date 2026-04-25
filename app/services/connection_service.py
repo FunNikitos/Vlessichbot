@@ -1,8 +1,10 @@
 """Connection (config) domain operations.
 
-Stub-версия для шага 1: реальная интеграция с Marzban будет в фазе 2.
-Сейчас мы создаём запись в БД с псевдо-URL'ом, чтобы хэндлеры
-работали end-to-end (можно посмотреть QR/список/удалить)."""
+Создание конфига = ensure пользователь существует в Marzban и взять
+его subscription_url. Несколько Connection на одного пользователя —
+это просто разные «именованные виды» одного и того же sub-URL
+(Marzban-юзер один на Telegram-юзера, но имена/режимы routing разные).
+"""
 from __future__ import annotations
 
 import logging
@@ -13,6 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.models import Connection, Server, User
+from app.services.marzban.service import (
+    delete_marzban_user,
+    ensure_marzban_user,
+)
 
 log = logging.getLogger(__name__)
 
@@ -34,16 +40,17 @@ async def _ensure_default_server(session: AsyncSession) -> Server:
 
 async def create_connection(session: AsyncSession, user: User) -> Connection:
     server = await _ensure_default_server(session)
+    payload = await ensure_marzban_user(user)
+    sub_url = payload.get("subscription_url") or ""
+    if not sub_url:
+        # старые версии Marzban иногда отдают только ключ без хоста
+        token_path = payload.get("subscription_token") or payload.get("subscription") or ""
+        if token_path:
+            sub_url = f"https://{settings.server_domain}{token_path}"
+    if not sub_url:
+        raise RuntimeError("Marzban не вернул subscription_url")
 
-    if user.sub_token is None:
-        user.sub_token = secrets.token_urlsafe(24)
-
-    sub_url = (
-        f"https://{settings.server_domain}:{settings.subscription_public_port}"
-        f"/sub/{user.sub_token}"
-    )
     name = f"vlessich-{secrets.token_hex(2)}"
-
     conn = Connection(
         user_id=user.id,
         server_id=server.id,
@@ -81,5 +88,15 @@ async def delete_connection(session: AsyncSession, conn_id: int, user_id: int) -
     if conn is None:
         return False
     await session.delete(conn)
+    # Если это был последний конфиг — удаляем Marzban-юзера целиком.
+    remaining = await session.execute(
+        select(Connection).where(Connection.user_id == user_id)
+    )
+    if remaining.first() is None:
+        result = await session.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user is not None:
+            await delete_marzban_user(user)
+            user.marzban_username = None
     await session.commit()
     return True
